@@ -193,15 +193,27 @@ def ingest_documents(data_path: Path, vectorstore: Chroma) -> int:
 
 
 def format_docs(docs):
-    """Format retrieved documents for prompt context."""
-    return "\n\n".join(doc.page_content for doc in docs)
+    """Format retrieved documents with structured metadata for citation generation."""
+    formatted_pieces = []
+    for i, doc in enumerate(docs, 1):
+        filename = doc.metadata.get("filename", "unknown_source")
+        title = doc.metadata.get("title", "Untitled Section")
+        chunk_idx = doc.metadata.get("chunk_index", 0)
+        formatted_pieces.append(
+            f"[Document {i}]\n"
+            f"Filename: {filename}\n"
+            f"Section Title: {title}\n"
+            f"Chunk Index: {chunk_idx}\n"
+            f"Content:\n{doc.page_content.strip()}"
+        )
+    return "\n\n".join(formatted_pieces)
 
 
 def build_rag_chain(retriever, llm=None):
     """
     Construct the modern LangChain Expression Language (LCEL) RAG chain.
-    Chain structure:
-      Input (question) -> {context, question} -> Prompt -> LLM -> StrOutputParser
+    Instructs the LLM to provide a synthesized answer followed by clear,
+    numbered source citations (source note filename, section title, chunk index).
     """
     if llm is None:
         api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
@@ -211,14 +223,20 @@ def build_rag_chain(retriever, llm=None):
             temperature=0,
         )
 
-    # Standard RAG Prompt Template (equivalent to rlm/rag-prompt)
     rag_prompt = ChatPromptTemplate.from_template(
-        "You are an assistant for question-answering tasks. "
-        "Use the following pieces of retrieved context to answer the question. "
-        "If you don't know the answer, just say that you don't know. "
-        "Use three sentences maximum and keep the answer concise.\n\n"
+        "You are an assistant for question-answering tasks over reference notes.\n"
+        "Use the following retrieved context documents to answer the user's question.\n\n"
+        "Instructions:\n"
+        "1. Synthesize a comprehensive, accurate, and direct answer based strictly on the provided context.\n"
+        "2. At the end of your answer, provide a dedicated 'Sources:' section with clear, numbered citations.\n"
+        "3. Each citation must strictly list the source note filename, section title, and chunk index corresponding to the document(s) used to formulate the answer.\n"
+        "   Example format:\n"
+        "   Sources:\n"
+        "   1. generative_security_intro.md - Introduction to Generative AI Security (Chunk 0)\n"
+        "   2. rag_architecture_best_practices.md - RAG Architecture and Retrieval Best Practices (Chunk 1)\n"
+        "4. If the answer cannot be determined from the context, state that you do not have sufficient information in the notes to answer, and omit the citations.\n\n"
+        "Context:\n{context}\n\n"
         "Question: {question}\n\n"
-        "Context: {context}\n\n"
         "Answer:"
     )
 
@@ -233,56 +251,68 @@ def build_rag_chain(retriever, llm=None):
 
 
 def main():
-    """Main execution loop for interactive RAG querying."""
-    print("Initializing RAG vector database with Google Gemini...")
+    """Interactive CLI loop for question answering over the loaded notes."""
+    print("=" * 65)
+    print(" COT5930 - Interactive Note QA System (Google Gemini & Chroma)")
+    print("=" * 65)
+    print(f"Local Persistence (.chromadb): {PERSIST_DIRECTORY}")
+    print("Embedding Model: models/gemini-embedding-001")
+    print("Language Model:  models/gemini-3.6-flash")
+    print("-" * 65)
+
     vectorstore = get_vectorstore()
 
     # Determine primary notes directory or fallback
     target_dir = NOTES_DIRECTORY if NOTES_DIRECTORY.exists() else RAG_DATA_DIRECTORY
 
-    # Seed with sample data if the vector database is currently empty
+    # Ingest documents if vector store is currently empty
     existing_count = vectorstore._collection.count()
     if existing_count == 0 and target_dir.exists():
-        print(f"Vector store is empty. Ingesting documents from {target_dir}...")
+        print(f"Vector store is empty. Ingesting notes from {target_dir}...")
         count = ingest_documents(target_dir, vectorstore)
-        print(f"Successfully indexed {count} document chunks.")
+        print(f"Successfully indexed {count} document chunks into .chromadb/.")
 
     retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
     rag_chain = build_rag_chain(retriever)
 
-    print("Welcome to my RAG application. Ask me a question and I will answer it from the documents in my database shown below")
-    
-    # Retrieve and display unique document sources and metadata
+    print("Indexed Knowledge Base Notes:")
     collection_data = vectorstore.get()
-    document_data_sources = set()
+    indexed_sources = set()
     if collection_data and collection_data.get("metadatas"):
         for doc_metadata in collection_data["metadatas"]:
-            if doc_metadata and "source" in doc_metadata:
+            if doc_metadata and "filename" in doc_metadata:
+                fn = doc_metadata["filename"]
                 title = doc_metadata.get("title", "")
-                source_display = doc_metadata["source"]
-                if title:
-                    source_display += f" (Title: {title})"
-                document_data_sources.add(source_display)
+                display = f"{fn} (Title: {title})" if title else fn
+                indexed_sources.add(display)
 
-    if document_data_sources:
-        for source in sorted(document_data_sources):
-            print(f"  {source}")
+    if indexed_sources:
+        for source in sorted(indexed_sources):
+            print(f"  * {source}")
     else:
         print("  (No documents currently indexed)")
 
-    print("\nEnter your question (press Enter or Ctrl+C to exit):")
+    print("-" * 65)
+    print("Enter your question below. (Type 'exit', 'quit', or press Ctrl+C to exit)")
+    print("=" * 65 + "\n")
+
     while True:
         try:
-            line = input("llm>> ").strip()
-            if not line:
+            line = input("question>> ").strip()
+            if not line or line.lower() in {"exit", "quit", "q"}:
+                print("Goodbye!")
                 break
+
+            print("\nGenerating synthesized answer with citations...\n")
             result = rag_chain.invoke(line)
+            print("-" * 65)
             print(result)
+            print("-" * 65 + "\n")
         except (EOFError, KeyboardInterrupt):
             print("\nExiting.")
             break
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"\nError: {e}\n")
 
 
 if __name__ == "__main__":
