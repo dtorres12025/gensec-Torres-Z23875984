@@ -6,8 +6,10 @@ from dotenv import load_dotenv
 # 1. Load environment variables
 load_dotenv()
 
-# 2. Assert OPENAI_API_KEY is present
-assert os.getenv("OPENAI_API_KEY"), "OPENAI_API_KEY environment variable is not set."
+# 2. Assert GOOGLE_API_KEY is present
+assert os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY"), (
+    "GOOGLE_API_KEY environment variable is not set."
+)
 
 # LangChain LCEL & Core Components
 from langchain_core.prompts import ChatPromptTemplate
@@ -16,12 +18,8 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-# Model & Vector Store Components
-try:
-    from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-except ImportError:
-    from langchain_community.chat_models import ChatOpenAI
-    from langchain_community.embeddings import OpenAIEmbeddings
+# Google GenAI & Vector Store Components
+from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 
 try:
     from langchain_chroma import Chroma
@@ -36,10 +34,12 @@ PERSIST_DIRECTORY = os.getenv("CHROMA_PERSIST_DIRECTORY", str(BASE_DIR / ".chrom
 DATA_DIRECTORY = BASE_DIR.parent / "02_LangChain" / "07_RAG" / "rag_data" / "txt"
 
 
-def get_embedding_function() -> OpenAIEmbeddings:
-    """Initialize and return OpenAI embedding model."""
-    return OpenAIEmbeddings(
-        model=os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
+def get_embedding_function() -> GoogleGenerativeAIEmbeddings:
+    """Initialize and return Google Gemini embedding model."""
+    api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+    return GoogleGenerativeAIEmbeddings(
+        model=os.getenv("GOOGLE_EMBEDDING_MODEL", "models/gemini-embedding-001"),
+        google_api_key=api_key,
     )
 
 
@@ -81,9 +81,11 @@ def build_rag_chain(retriever, llm=None):
       Input (question) -> {context, question} -> Prompt -> LLM -> StrOutputParser
     """
     if llm is None:
-        llm = ChatOpenAI(
-            model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-            temperature=0
+        api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+        llm = ChatGoogleGenerativeAI(
+            model=os.getenv("GOOGLE_MODEL", "models/gemini-3.6-flash"),
+            google_api_key=api_key,
+            temperature=0,
         )
 
     # Standard RAG Prompt Template (equivalent to rlm/rag-prompt)
@@ -109,7 +111,7 @@ def build_rag_chain(retriever, llm=None):
 
 def main():
     """Main execution loop for interactive RAG querying."""
-    print("Initializing RAG vector database...")
+    print("Initializing RAG vector database with Google Gemini...")
     vectorstore = get_vectorstore()
 
     # Seed with sample data if the vector database is currently empty
