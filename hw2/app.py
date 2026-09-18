@@ -1,6 +1,9 @@
+from __future__ import annotations
 import os
+import re
 import sys
 from pathlib import Path
+from typing import Iterator, List, Optional, Union
 from dotenv import load_dotenv
 
 # 1. Load environment variables
@@ -11,11 +14,12 @@ assert os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY"), (
     "GOOGLE_API_KEY environment variable is not set."
 )
 
-# LangChain LCEL & Core Components
+# LangChain Core & Loader Base
+from langchain_community.document_loaders.base import BaseLoader
+from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
-from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 # Google GenAI & Vector Store Components
@@ -26,12 +30,133 @@ try:
 except ImportError:
     from langchain_community.vectorstores import Chroma
 
-from langchain_community.document_loaders import DirectoryLoader, TextLoader
+try:
+    import yaml
+except ImportError:
+    yaml = None
 
 # Paths configuration
 BASE_DIR = Path(__file__).resolve().parent
 PERSIST_DIRECTORY = os.getenv("CHROMA_PERSIST_DIRECTORY", str(BASE_DIR / ".chromadb"))
-DATA_DIRECTORY = BASE_DIR.parent / "02_LangChain" / "07_RAG" / "rag_data" / "txt"
+NOTES_DIRECTORY = BASE_DIR / "notes"
+RAG_DATA_DIRECTORY = BASE_DIR.parent / "02_LangChain" / "07_RAG" / "rag_data" / "txt"
+
+
+class CustomNoteLoader(BaseLoader):
+    """
+    Custom document loader for text (.txt) and markdown (.md) files.
+    Inherits from langchain_community.document_loaders.base.BaseLoader.
+    Parses titles, headers, and metadata tags into Document metadata,
+    and chunks the text into standard LangChain Document objects.
+    """
+
+    def __init__(
+        self,
+        directory_path: str | Path,
+        chunk_size: int = 800,
+        chunk_overlap: int = 100,
+        glob_pattern: str = "**/*",
+    ):
+        self.directory_path = Path(directory_path)
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
+        self.glob_pattern = glob_pattern
+        self.text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=self.chunk_size,
+            chunk_overlap=self.chunk_overlap,
+        )
+
+    def _parse_file(self, file_path: Path) -> List[Document]:
+        """Parse a single file, extract structural metadata, and chunk into Documents."""
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+        except Exception as e:
+            print(f"Warning: Failed to read {file_path}: {e}")
+            return []
+
+        title: Optional[str] = None
+        tags: List[str] = []
+        body = content
+
+        # 1. Parse YAML frontmatter if present
+        fm_match = re.match(r"^---\s*\n(.*?)\n---\s*\n", content, re.DOTALL)
+        if fm_match:
+            fm_content = fm_match.group(1)
+            body = content[fm_match.end() :]
+            if yaml:
+                try:
+                    meta_dict = yaml.safe_load(fm_content)
+                    if isinstance(meta_dict, dict):
+                        title = meta_dict.get("title")
+                        raw_tags = meta_dict.get("tags", [])
+                        if isinstance(raw_tags, list):
+                            tags.extend([str(t).strip() for t in raw_tags])
+                        elif isinstance(raw_tags, str):
+                            tags.extend([t.strip() for t in raw_tags.split(",")])
+                except Exception:
+                    pass
+
+        # 2. Extract title from top header if not found in frontmatter
+        header_lines = [
+            line.strip()
+            for line in body.splitlines()
+            if line.strip().startswith("#")
+        ]
+
+        if not title:
+            for h in header_lines:
+                if h.startswith("# "):
+                    title = h[2:].strip()
+                    break
+            if not title:
+                title = file_path.stem.replace("_", " ").title()
+
+        # 3. Extract inline hashtags from content (e.g. #security, #rag)
+        inline_tags = re.findall(r"(?:^|\s)#([a-zA-Z0-9_\-]+)", body)
+        for t in inline_tags:
+            if t.lower() not in [tag.lower() for tag in tags]:
+                tags.append(t)
+
+        # 4. Format headers and tags as strings for Chroma vectorstore compatibility
+        headers_str = "; ".join(header_lines) if header_lines else ""
+        tags_str = ", ".join(tags) if tags else ""
+
+        # 5. Split body into chunks
+        chunks = self.text_splitter.split_text(body)
+        if not chunks:
+            chunks = [body] if body.strip() else []
+
+        documents: List[Document] = []
+        for idx, chunk in enumerate(chunks):
+            metadata = {
+                "source": str(file_path.resolve()),
+                "filename": file_path.name,
+                "title": str(title),
+                "headers": headers_str,
+                "tags": tags_str,
+                "file_type": file_path.suffix.lower(),
+                "chunk_index": idx,
+                "total_chunks": len(chunks),
+            }
+            documents.append(Document(page_content=chunk, metadata=metadata))
+
+        return documents
+
+    def lazy_load(self) -> Iterator[Document]:
+        """Lazy load documents from directory matching text and markdown extensions."""
+        if not self.directory_path.exists():
+            return
+
+        supported_extensions = {".md", ".txt"}
+        for file_path in sorted(self.directory_path.glob(self.glob_pattern)):
+            if file_path.is_file() and file_path.suffix.lower() in supported_extensions:
+                for doc in self._parse_file(file_path):
+                    yield doc
+
+    def load(self) -> List[Document]:
+        """Eagerly load and chunk all notes into a list of Document objects."""
+        return list(self.lazy_load())
 
 
 def get_embedding_function() -> GoogleGenerativeAIEmbeddings:
@@ -53,20 +178,18 @@ def get_vectorstore(persist_directory: str = PERSIST_DIRECTORY) -> Chroma:
 
 def ingest_documents(data_path: Path, vectorstore: Chroma) -> int:
     """
-    Load text files from directory, split into chunks, and store in vector database.
+    Load documents from directory using CustomNoteLoader, chunk, and store in vector database.
     """
     if not data_path.exists():
         return 0
 
-    loader = DirectoryLoader(str(data_path), glob="**/*.txt", loader_cls=TextLoader)
+    loader = CustomNoteLoader(data_path)
     documents = loader.load()
     if not documents:
         return 0
 
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
-    chunks = text_splitter.split_documents(documents)
-    vectorstore.add_documents(chunks)
-    return len(chunks)
+    vectorstore.add_documents(documents)
+    return len(documents)
 
 
 def format_docs(docs):
@@ -114,11 +237,14 @@ def main():
     print("Initializing RAG vector database with Google Gemini...")
     vectorstore = get_vectorstore()
 
+    # Determine primary notes directory or fallback
+    target_dir = NOTES_DIRECTORY if NOTES_DIRECTORY.exists() else RAG_DATA_DIRECTORY
+
     # Seed with sample data if the vector database is currently empty
     existing_count = vectorstore._collection.count()
-    if existing_count == 0 and DATA_DIRECTORY.exists():
-        print(f"Vector store is empty. Ingesting documents from {DATA_DIRECTORY}...")
-        count = ingest_documents(DATA_DIRECTORY, vectorstore)
+    if existing_count == 0 and target_dir.exists():
+        print(f"Vector store is empty. Ingesting documents from {target_dir}...")
+        count = ingest_documents(target_dir, vectorstore)
         print(f"Successfully indexed {count} document chunks.")
 
     retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
@@ -126,13 +252,17 @@ def main():
 
     print("Welcome to my RAG application. Ask me a question and I will answer it from the documents in my database shown below")
     
-    # Retrieve and display unique document sources
+    # Retrieve and display unique document sources and metadata
     collection_data = vectorstore.get()
     document_data_sources = set()
     if collection_data and collection_data.get("metadatas"):
         for doc_metadata in collection_data["metadatas"]:
             if doc_metadata and "source" in doc_metadata:
-                document_data_sources.add(doc_metadata["source"])
+                title = doc_metadata.get("title", "")
+                source_display = doc_metadata["source"]
+                if title:
+                    source_display += f" (Title: {title})"
+                document_data_sources.add(source_display)
 
     if document_data_sources:
         for source in sorted(document_data_sources):
