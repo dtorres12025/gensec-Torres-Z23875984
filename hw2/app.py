@@ -7,11 +7,20 @@ for querying local text and markdown notes with source citations.
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 import sys
+import warnings
 from pathlib import Path
 from typing import Any, Iterator, List, Optional, Union
+
+# Suppress library deprecation and SSL version warnings for clean terminal presentation
+warnings.filterwarnings("ignore")
+logging.getLogger("langchain").setLevel(logging.ERROR)
+logging.getLogger("langchain_core").setLevel(logging.ERROR)
+logging.getLogger("langchain_community").setLevel(logging.ERROR)
+
 from dotenv import load_dotenv
 
 # 1. Load environment variables
@@ -23,7 +32,11 @@ assert os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY"), (
 )
 
 # LangChain Core & Loader Base
-from langchain_community.document_loaders.base import BaseLoader
+try:
+    from langchain_core.document_loaders import BaseLoader
+except ImportError:
+    from langchain_community.document_loaders.base import BaseLoader
+
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -255,6 +268,23 @@ def ingest_documents(data_path: Path, vectorstore: Chroma) -> int:
     return len(documents)
 
 
+def reindex_knowledge_base(target_dir: Path, vectorstore: Chroma) -> int:
+    """Reset and re-index all notes from target directory into the Chroma collection.
+
+    Args:
+        target_dir: Directory containing Markdown or text notes.
+        vectorstore: Target Chroma vectorstore instance.
+
+    Returns:
+        Integer count of document chunks newly indexed.
+    """
+    existing_data = vectorstore.get()
+    existing_ids = existing_data.get("ids", []) if existing_data else []
+    if existing_ids:
+        vectorstore.delete(ids=existing_ids)
+    return ingest_documents(target_dir, vectorstore)
+
+
 def format_docs(docs: List[Document]) -> str:
     """Format retrieved documents with structured metadata for citation generation.
 
@@ -367,8 +397,17 @@ def answer_question(question: str, rag_chain: Any) -> str:
         return f"Error executing query: {e}"
 
 
-def main() -> None:
-    """Run the interactive CLI loop for question answering over local notes."""
+def main(argv: Optional[List[str]] = None) -> None:
+    """Run the CLI application for question answering over local notes.
+
+    Supports interactive query prompt, single query execution via CLI arguments,
+    and automatic or manual knowledge base re-indexing (--reindex).
+
+    Args:
+        argv: Optional list of command-line argument strings.
+    """
+    args = argv if argv is not None else sys.argv[1:]
+
     print("=" * 65)
     print(" COT5930 - Interactive Note QA System (Google Gemini & Chroma)")
     print("=" * 65)
@@ -378,18 +417,23 @@ def main() -> None:
     print("-" * 65)
 
     vectorstore = get_vectorstore()
-
-    # Determine primary notes directory or fallback
     target_dir = NOTES_DIRECTORY if NOTES_DIRECTORY.exists() else RAG_DATA_DIRECTORY
 
-    # Ingest documents if vector store is currently empty
+    # Check for manual re-indexing flag
+    if "--reindex" in args:
+        print(f"Re-indexing knowledge base from {target_dir}...")
+        count = reindex_knowledge_base(target_dir, vectorstore)
+        print(f"Successfully re-indexed {count} document chunks into .chromadb/.")
+        args = [a for a in args if a != "--reindex"]
+
+    # Auto-ingest documents if vector store is currently empty
     existing_count = vectorstore._collection.count()
     if existing_count == 0 and target_dir.exists():
         print(f"Vector store is empty. Ingesting notes from {target_dir}...")
         count = ingest_documents(target_dir, vectorstore)
         print(f"Successfully indexed {count} document chunks into .chromadb/.")
 
-    # Apply relevance score thresholding for boundary checking
+    # Configure retriever with similarity score threshold for boundary checking
     retriever = vectorstore.as_retriever(
         search_type="similarity_score_threshold",
         search_kwargs={"score_threshold": 0.65, "k": 3},
@@ -414,6 +458,19 @@ def main() -> None:
         print("  (No documents currently indexed)")
 
     print("-" * 65)
+
+    # Single-query execution mode via CLI argument
+    if args:
+        cli_query = " ".join(args).strip()
+        print(f"question>> {cli_query}\n")
+        print("Processing question with boundary check...\n")
+        result = answer_question(cli_query, rag_chain)
+        print("-" * 65)
+        print(result)
+        print("-" * 65 + "\n")
+        return
+
+    # Interactive prompt loop
     print("Enter your question below. (Type 'exit', 'quit', or press Ctrl+C to exit)")
     print("=" * 65 + "\n")
 
