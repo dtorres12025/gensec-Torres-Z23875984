@@ -1,0 +1,4 @@
+langchain
+langchain_openrouter
+bs4
+requests

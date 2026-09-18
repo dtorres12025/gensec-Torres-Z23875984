@@ -1,0 +1,122 @@
+import os
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_community.document_loaders import AsyncHtmlLoader, DirectoryLoader, TextLoader, PyPDFDirectoryLoader, Docx2txtLoader, UnstructuredMarkdownLoader, WikipediaLoader, ArxivLoader, CSVLoader, GithubFileLoader
+from langchain_core.documents import Document
+from youtube_transcript_api import YouTubeTranscriptApi
+from langchain_chroma import Chroma
+from langchain_openai import OpenAIEmbeddings
+import readline
+import wikipedia
+
+# Wikipedia rate-limits the wikipedia package's generic default User-Agent,
+# returning a 429 plain-text response that breaks WikipediaLoader with a
+# JSONDecodeError. Reuse the USER_AGENT env var students already export.
+wikipedia.set_user_agent(os.environ["USER_AGENT"])
+
+vectorstore = Chroma(
+    embedding_function=OpenAIEmbeddings(
+        model=os.getenv("OPENROUTER_EMBEDDING_MODEL", "google/gemini-embedding-001"),
+        openai_api_key=os.getenv("OPENROUTER_API_KEY"),
+        openai_api_base="https://openrouter.ai/api/v1",
+        model_kwargs={"encoding_format": "float"},
+        check_embedding_ctx_length=False,
+    ),
+    persist_directory="./rag_data/.chromadb"
+)
+
+def load_docs(docs):
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=10000, chunk_overlap=10)
+    splits = text_splitter.split_documents(docs)
+    vectorstore.add_documents(documents=splits)
+
+def load_urls(urls):
+    load_docs(AsyncHtmlLoader(urls).load())
+
+def load_wikipedia(query):
+    load_docs(WikipediaLoader(query=query, load_max_docs=1).load())
+
+def load_arxiv(query):
+    docs = ArxivLoader(query=query, load_max_docs=1).load()
+    docs[0].metadata['source'] = f"arxiv:{query}"
+    load_docs(docs)
+
+def load_github(file):
+    loader = GithubFileLoader(
+    repo="wu4f/cs475-src",  # the repo name
+    branch="main",  # the branch name
+    github_api_url="https://api.github.com",
+    file_filter=lambda file_path: file_path.endswith(
+        file
+    ),  # any file in the repo that ends with file 
+    )
+    documents = loader.load() 
+    load_docs(documents)
+
+def load_youtube(video_id):
+    transcript = YouTubeTranscriptApi().fetch(video_id)
+    text = ' '.join([entry.text for entry in transcript])
+    docs = [Document(page_content=text, metadata={'source': f'youtube:{video_id}'})]
+    load_docs(docs)
+
+def load_txt(directory):
+    load_docs(DirectoryLoader(directory, glob="**/*.txt", loader_cls=TextLoader).load())
+
+def load_pdf(directory):
+    load_docs(PyPDFDirectoryLoader(directory).load())
+
+def load_docx(directory):
+    load_docs(DirectoryLoader(directory, glob="**/*.docx", loader_cls=Docx2txtLoader).load())
+
+def load_md(directory):
+    load_docs(DirectoryLoader(directory, glob="**/*.md", loader_cls=UnstructuredMarkdownLoader).load())
+
+def load_csv(directory):
+    load_docs(DirectoryLoader(directory, glob="**/*.csv", loader_cls=CSVLoader).load())
+
+urls = ["https://www.pdx.edu/academics/programs/undergraduate/computer-science", "https://www.pdx.edu/computer-science/"]
+print(f"Loading: {urls}")
+load_urls(urls)
+
+wiki_query = "LangChain"
+print(f"Loading Wikipedia pages on: {wiki_query}")
+load_wikipedia(wiki_query)
+
+arxiv_query = "2310.03714"
+print(f"Loading arxiv document: {arxiv_query}")
+load_arxiv(arxiv_query)
+
+github_file = "butcher.py"
+print(f"Loading github file(s) with ending: {github_file}")
+load_github(github_file)
+
+youtube_video_id = "78600iosmis"
+print(f"Loading YouTube video: {youtube_video_id}")
+load_youtube(youtube_video_id)
+
+text_directory = "rag_data/txt"
+print(f"Loading TXT files from: {text_directory}")
+load_txt(text_directory)
+
+pdf_directory = "rag_data/pdf"
+print(f"Loading PDF files from: {pdf_directory}")
+load_pdf(pdf_directory)
+
+docx_directory = "rag_data/docx"
+print(f"Loading DOCX files from: {docx_directory}")
+load_docx(docx_directory)
+
+md_directory = "rag_data/md"
+print(f"Loading MD files from: {md_directory}")
+load_md(md_directory)
+
+csv_directory = "rag_data/csv"
+print(f"Loading CSV files from: {csv_directory}")
+load_csv(csv_directory)
+
+print("RAG database initialized with the following sources.")
+retriever = vectorstore.as_retriever()
+document_data_sources = set()
+for doc_metadata in retriever.vectorstore.get()['metadatas']:
+    document_data_sources.add(doc_metadata['source']) 
+for doc in document_data_sources:
+    print(f"  {doc}")
