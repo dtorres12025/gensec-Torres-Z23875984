@@ -1,9 +1,17 @@
+"""RAG Question Answering System with Google Gemini and Chroma.
+
+This module provides document loading, vector storage with Chroma,
+and a modern LangChain Expression Language (LCEL) retrieval pipeline
+for querying local text and markdown notes with source citations.
+"""
+
 from __future__ import annotations
+
 import os
 import re
 import sys
 from pathlib import Path
-from typing import Iterator, List, Optional, Union
+from typing import Any, Iterator, List, Optional, Union
 from dotenv import load_dotenv
 
 # 1. Load environment variables
@@ -19,7 +27,11 @@ from langchain_community.document_loaders.base import BaseLoader
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnablePassthrough
+from langchain_core.runnables import (
+    RunnableBranch,
+    RunnableLambda,
+    RunnablePassthrough,
+)
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 # Google GenAI & Vector Store Components
@@ -36,38 +48,60 @@ except ImportError:
     yaml = None
 
 # Paths configuration
-BASE_DIR = Path(__file__).resolve().parent
-PERSIST_DIRECTORY = os.getenv("CHROMA_PERSIST_DIRECTORY", str(BASE_DIR / ".chromadb"))
-NOTES_DIRECTORY = BASE_DIR / "notes"
-RAG_DATA_DIRECTORY = BASE_DIR.parent / "02_LangChain" / "07_RAG" / "rag_data" / "txt"
+BASE_DIR: Path = Path(__file__).resolve().parent
+PERSIST_DIRECTORY: str = os.getenv("CHROMA_PERSIST_DIRECTORY", str(BASE_DIR / ".chromadb"))
+NOTES_DIRECTORY: Path = BASE_DIR / "notes"
+RAG_DATA_DIRECTORY: Path = BASE_DIR.parent / "02_LangChain" / "07_RAG" / "rag_data" / "txt"
+
+# Standardized fallback message for boundary checks
+FALLBACK_MESSAGE: str = (
+    "No relevant notes were found in the knowledge base to answer your question."
+)
 
 
 class CustomNoteLoader(BaseLoader):
-    """
-    Custom document loader for text (.txt) and markdown (.md) files.
-    Inherits from langchain_community.document_loaders.base.BaseLoader.
-    Parses titles, headers, and metadata tags into Document metadata,
-    and chunks the text into standard LangChain Document objects.
+    """Document loader for parsing and chunking local markdown and text notes.
+
+    Inherits from BaseLoader to scan directories for markdown (.md) and plain
+    text (.txt) notes, extracts structured metadata (titles, headers, tags),
+    and splits the body text into standard LangChain Document objects.
     """
 
     def __init__(
         self,
-        directory_path: str | Path,
+        directory_path: Union[str, Path],
         chunk_size: int = 800,
         chunk_overlap: int = 100,
         glob_pattern: str = "**/*",
-    ):
-        self.directory_path = Path(directory_path)
-        self.chunk_size = chunk_size
-        self.chunk_overlap = chunk_overlap
-        self.glob_pattern = glob_pattern
-        self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=self.chunk_size,
-            chunk_overlap=self.chunk_overlap,
+    ) -> None:
+        """Initialize the CustomNoteLoader with directory and chunking parameters.
+
+        Args:
+            directory_path: Filesystem path to directory containing notes.
+            chunk_size: Maximum character count per document chunk.
+            chunk_overlap: Number of characters to overlap across adjacent chunks.
+            glob_pattern: Glob pattern used for recursive file matching.
+        """
+        self.directory_path: Path = Path(directory_path)
+        self.chunk_size: int = chunk_size
+        self.chunk_overlap: int = chunk_overlap
+        self.glob_pattern: str = glob_pattern
+        self.text_splitter: RecursiveCharacterTextSplitter = (
+            RecursiveCharacterTextSplitter(
+                chunk_size=self.chunk_size,
+                chunk_overlap=self.chunk_overlap,
+            )
         )
 
     def _parse_file(self, file_path: Path) -> List[Document]:
-        """Parse a single file, extract structural metadata, and chunk into Documents."""
+        """Parse a single file, extract structural metadata, and chunk into Documents.
+
+        Args:
+            file_path: Absolute or relative Path pointing to the note file.
+
+        Returns:
+            A list of Document objects with extracted metadata and split text.
+        """
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
@@ -144,7 +178,11 @@ class CustomNoteLoader(BaseLoader):
         return documents
 
     def lazy_load(self) -> Iterator[Document]:
-        """Lazy load documents from directory matching text and markdown extensions."""
+        """Lazily parse and yield Document chunks from supported files in the directory.
+
+        Yields:
+            Document: Each split document chunk with enriched metadata.
+        """
         if not self.directory_path.exists():
             return
 
@@ -155,13 +193,25 @@ class CustomNoteLoader(BaseLoader):
                     yield doc
 
     def load(self) -> List[Document]:
-        """Eagerly load and chunk all notes into a list of Document objects."""
+        """Eagerly load and chunk all notes into a list of Document objects.
+
+        Returns:
+            List of all generated Document chunks across all parsed files.
+        """
         return list(self.lazy_load())
 
 
 def get_embedding_function() -> GoogleGenerativeAIEmbeddings:
-    """Initialize and return Google Gemini embedding model."""
+    """Initialize and return the Google Gemini embedding model.
+
+    Returns:
+        Configured GoogleGenerativeAIEmbeddings instance using gemini-embedding-001.
+
+    Raises:
+        AssertionError: If neither GOOGLE_API_KEY nor GEMINI_API_KEY is in the environment.
+    """
     api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+    assert api_key, "Google API key is required to initialize embeddings."
     return GoogleGenerativeAIEmbeddings(
         model=os.getenv("GOOGLE_EMBEDDING_MODEL", "models/gemini-embedding-001"),
         google_api_key=api_key,
@@ -169,16 +219,29 @@ def get_embedding_function() -> GoogleGenerativeAIEmbeddings:
 
 
 def get_vectorstore(persist_directory: str = PERSIST_DIRECTORY) -> Chroma:
-    """Initialize or load the Chroma vector database."""
+    """Initialize or load the local Chroma vector database.
+
+    Args:
+        persist_directory: Directory path where Chroma database files are stored.
+
+    Returns:
+        An active Chroma vectorstore instance connected to the persistent directory.
+    """
     return Chroma(
         persist_directory=persist_directory,
-        embedding_function=get_embedding_function()
+        embedding_function=get_embedding_function(),
     )
 
 
 def ingest_documents(data_path: Path, vectorstore: Chroma) -> int:
-    """
-    Load documents from directory using CustomNoteLoader, chunk, and store in vector database.
+    """Load notes using CustomNoteLoader and store them in the Chroma vector database.
+
+    Args:
+        data_path: Directory path containing the source notes.
+        vectorstore: Target Chroma vectorstore instance for document storage.
+
+    Returns:
+        Integer count of total document chunks successfully indexed.
     """
     if not data_path.exists():
         return 0
@@ -192,8 +255,15 @@ def ingest_documents(data_path: Path, vectorstore: Chroma) -> int:
     return len(documents)
 
 
-def format_docs(docs):
-    """Format retrieved documents with structured metadata for citation generation."""
+def format_docs(docs: List[Document]) -> str:
+    """Format retrieved documents with structured metadata for citation generation.
+
+    Args:
+        docs: List of retrieved Document objects from vectorstore search.
+
+    Returns:
+        A formatted string containing labeled document metadata and content blocks.
+    """
     formatted_pieces = []
     for i, doc in enumerate(docs, 1):
         filename = doc.metadata.get("filename", "unknown_source")
@@ -209,11 +279,19 @@ def format_docs(docs):
     return "\n\n".join(formatted_pieces)
 
 
-def build_rag_chain(retriever, llm=None):
-    """
-    Construct the modern LangChain Expression Language (LCEL) RAG chain.
-    Instructs the LLM to provide a synthesized answer followed by clear,
-    numbered source citations (source note filename, section title, chunk index).
+def build_rag_chain(retriever: Any, llm: Optional[Any] = None) -> Any:
+    """Construct the modern LCEL RAG chain with boundary checks and citation formatting.
+
+    Implements programmatic boundary checks: if the retriever returns zero
+    relevant documents (e.g. falling below the similarity score threshold),
+    the chain immediately routes to FALLBACK_MESSAGE without calling the LLM.
+
+    Args:
+        retriever: Vectorstore retriever instance for document search.
+        llm: Optional language model instance; defaults to ChatGoogleGenerativeAI.
+
+    Returns:
+        A compiled LCEL Runnable chain capable of processing queries with boundary checks.
     """
     if llm is None:
         api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
@@ -229,29 +307,68 @@ def build_rag_chain(retriever, llm=None):
         "Instructions:\n"
         "1. Synthesize a comprehensive, accurate, and direct answer based strictly on the provided context.\n"
         "2. At the end of your answer, provide a dedicated 'Sources:' section with clear, numbered citations.\n"
-        "3. Each citation must strictly list the source note filename, section title, and chunk index corresponding to the document(s) used to formulate the answer.\n"
+        "3. Each citation must strictly list the source note filename, section title, and chunk index corresponding to the document(s) used.\n"
         "   Example format:\n"
         "   Sources:\n"
         "   1. generative_security_intro.md - Introduction to Generative AI Security (Chunk 0)\n"
         "   2. rag_architecture_best_practices.md - RAG Architecture and Retrieval Best Practices (Chunk 1)\n"
-        "4. If the answer cannot be determined from the context, state that you do not have sufficient information in the notes to answer, and omit the citations.\n\n"
+        "4. If the context does not contain enough information to answer the question, or if the question is outside the scope of the notes, respond strictly with:\n"
+        f"'{FALLBACK_MESSAGE}'\n"
+        "Do not hallucinate facts or invent sources.\n\n"
         "Context:\n{context}\n\n"
         "Question: {question}\n\n"
         "Answer:"
     )
 
-    rag_chain = (
-        {"context": retriever | format_docs, "question": RunnablePassthrough()}
+    # Core generation chain when valid context is present
+    generation_chain = (
+        RunnablePassthrough.assign(context=lambda x: format_docs(x["raw_docs"]))
         | rag_prompt
         | llm
         | StrOutputParser()
     )
 
+    # Retrieval step that captures raw documents for boundary inspection
+    def retrieve_with_boundary_check(question: str) -> dict:
+        """Retrieve documents and package them with the original question."""
+        docs = retriever.invoke(question)
+        return {"question": question, "raw_docs": docs}
+
+    # Branching: if raw_docs is empty, return FALLBACK_MESSAGE directly
+    rag_chain = (
+        RunnableLambda(retrieve_with_boundary_check)
+        | RunnableBranch(
+            (lambda x: len(x.get("raw_docs", [])) == 0, lambda _: FALLBACK_MESSAGE),
+            generation_chain,
+        )
+    )
+
     return rag_chain
 
 
-def main():
-    """Interactive CLI loop for question answering over the loaded notes."""
+def answer_question(question: str, rag_chain: Any) -> str:
+    """Execute a question through the RAG chain and apply boundary validation.
+
+    Args:
+        question: Natural language question string from the user.
+        rag_chain: Compiled LCEL RAG chain.
+
+    Returns:
+        Synthesized answer with citations, or the standardized fallback message.
+    """
+    clean_question = question.strip()
+    if not clean_question:
+        return FALLBACK_MESSAGE
+
+    try:
+        response = rag_chain.invoke(clean_question)
+        return response
+    except Exception as e:
+        return f"Error executing query: {e}"
+
+
+def main() -> None:
+    """Run the interactive CLI loop for question answering over local notes."""
     print("=" * 65)
     print(" COT5930 - Interactive Note QA System (Google Gemini & Chroma)")
     print("=" * 65)
@@ -272,7 +389,11 @@ def main():
         count = ingest_documents(target_dir, vectorstore)
         print(f"Successfully indexed {count} document chunks into .chromadb/.")
 
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+    # Apply relevance score thresholding for boundary checking
+    retriever = vectorstore.as_retriever(
+        search_type="similarity_score_threshold",
+        search_kwargs={"score_threshold": 0.65, "k": 3},
+    )
     rag_chain = build_rag_chain(retriever)
 
     print("Indexed Knowledge Base Notes:")
@@ -303,8 +424,8 @@ def main():
                 print("Goodbye!")
                 break
 
-            print("\nGenerating synthesized answer with citations...\n")
-            result = rag_chain.invoke(line)
+            print("\nProcessing question with boundary check...\n")
+            result = answer_question(line, rag_chain)
             print("-" * 65)
             print(result)
             print("-" * 65 + "\n")
