@@ -1,6 +1,59 @@
-env
-.venv
-.chromadb
-__pycache__
-*.pyc
+# Environments & Secrets
 .env
+.env.*
+!.env.example
+.venv/
+.venv
+venv/
+venv
+env/
+env
+ENV/
+ENV
+
+# Python Bytecode & Cache
+__pycache__/
+__pycache__
+*.py[cod]
+*$py.class
+*.pyo
+
+# Testing & Coverage
+.pytest_cache/
+.pytest_cache
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Type Checking & Linting
+.mypy_cache/
+.mypy_cache
+.ruff_cache/
+.ruff_cache
+
+# Build & Packaging
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Database & Vector Storage (HW2 ChromaDB)
+.chromadb/
+.chromadb
+
+# Operating System Artifacts
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDEs & Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
