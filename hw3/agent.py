@@ -3,8 +3,9 @@
 # Course: COT 5930 - Security Engineering Systems with Generative AI
 """Autonomous cybersecurity agent for system diagnostics and vulnerability remediation.
 
-This module assembles a LangGraph ReAct agent powered by ChatOpenAI and configured
-with system inspection and security advisory tools. The agent adheres strictly
+This module assembles a LangGraph ReAct agent powered by either Google Gemini
+(via ChatGoogleGenerativeAI) or OpenAI (via ChatOpenAI), bound with system
+diagnostic inspection and security advisory tools. The agent adheres strictly
 to defensive operating policies and sandboxed execution boundaries.
 """
 
@@ -12,7 +13,9 @@ import os
 from pathlib import Path
 from typing import List, Optional
 from dotenv import load_dotenv
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.tools import BaseTool
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import create_react_agent
@@ -53,43 +56,71 @@ SYSTEM_PROMPT: str = (
 def get_security_agent(
     model_name: Optional[str] = None,
     api_key: Optional[str] = None,
+    provider: Optional[str] = None,
     temperature: float = 0.0,
 ) -> CompiledStateGraph:
     """Initialize and compile the autonomous cybersecurity ReAct agent.
 
-    Configures a ChatOpenAI model utilizing environment variables (AGENT_MODEL
-    defaulting to 'gpt-4o-mini', and OPENAI_API_KEY), binds the security advisory
-    and guarded terminal tools, and initializes the LangGraph ReAct workflow.
+    Configures a chat model using Google Gemini (via ChatGoogleGenerativeAI) or
+    OpenAI (via ChatOpenAI) depending on available environment keys (GOOGLE_API_KEY
+    or OPENAI_API_KEY), binds the defensive advisory and terminal tools, and
+    compiles the LangGraph ReAct execution graph.
 
     Args:
         model_name: Optional override for the language model name. Defaults to the
-            AGENT_MODEL environment variable or 'gpt-4o-mini'.
-        api_key: Optional override for the OpenAI API key. Defaults to the
-            OPENAI_API_KEY environment variable.
+            AGENT_MODEL environment variable, 'gemini-3.8-flash' (Google), or
+            'gpt-4o-mini' (OpenAI).
+        api_key: Optional override for the API key. Defaults to GOOGLE_API_KEY or
+            OPENAI_API_KEY from the environment.
+        provider: Optional explicit provider selection ('google' or 'openai').
+            Auto-detected based on available environment variables if not specified.
         temperature: Sampling temperature for model responses. Defaults to 0.0.
 
     Returns:
         CompiledStateGraph: The compiled executable LangGraph ReAct agent.
 
     Raises:
-        ValueError: If OPENAI_API_KEY is not configured in environment variables
-            or provided as a parameter.
+        ValueError: If neither GOOGLE_API_KEY nor OPENAI_API_KEY is configured.
     """
-    resolved_model: str = model_name or os.getenv("AGENT_MODEL", "gpt-4o-mini")
-    resolved_api_key: Optional[str] = api_key or os.getenv("OPENAI_API_KEY")
-
-    if not resolved_api_key:
-        raise ValueError(
-            "OPENAI_API_KEY is not set. Please provide it in your .env file, "
-            "set the environment variable, or pass api_key to get_security_agent()."
-        )
-
-    # Initialize LLM with defensive configuration
-    llm: ChatOpenAI = ChatOpenAI(
-        model=resolved_model,
-        api_key=resolved_api_key,
-        temperature=temperature,
+    google_key: Optional[str] = (
+        api_key or os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
     )
+    openai_key: Optional[str] = (
+        api_key or os.getenv("OPENAI_API_KEY")
+    )
+
+    # Determine LLM Provider
+    selected_provider: str = provider or ("google" if google_key else ("openai" if openai_key else "google"))
+
+    llm: BaseChatModel
+    if selected_provider == "google":
+        resolved_key: Optional[str] = api_key or google_key
+        if not resolved_key or resolved_key.strip() == "your_google_api_key_here":
+            raise ValueError(
+                "GOOGLE_API_KEY is not set. Please add your Google API key to hw3/.env:\n"
+                "    GOOGLE_API_KEY=AIzaSy..."
+            )
+        resolved_model: str = model_name or os.getenv("AGENT_MODEL", "gemini-3.8-flash")
+        llm = ChatGoogleGenerativeAI(
+            model=resolved_model,
+            google_api_key=resolved_key,
+            temperature=temperature,
+        )
+    elif selected_provider == "openai":
+        resolved_key: Optional[str] = api_key or openai_key
+        if not resolved_key or resolved_key.strip() == "your_openai_api_key_here":
+            raise ValueError(
+                "OPENAI_API_KEY is not set. Please add your OpenAI API key to hw3/.env:\n"
+                "    OPENAI_API_KEY=sk-..."
+            )
+        resolved_model: str = model_name or os.getenv("AGENT_MODEL", "gpt-4o-mini")
+        llm = ChatOpenAI(
+            model=resolved_model,
+            api_key=resolved_key,
+            temperature=temperature,
+        )
+    else:
+        raise ValueError(f"Unsupported provider '{selected_provider}'. Must be 'google' or 'openai'.")
 
     # Bind defensive security tools
     tools: List[BaseTool] = [
@@ -116,10 +147,14 @@ if __name__ == "__main__":
     print("=" * 70)
 
     try:
-        # Use existing key or fallback mock key for instantiation verification
-        test_key: str = os.getenv("OPENAI_API_KEY") or "mock-api-key-for-initialization"
-        test_agent: CompiledStateGraph = get_security_agent(api_key=test_key)
-        print("Status: Agent graph compiled successfully.")
+        # Check available key or fallback to mock key for compilation test
+        mock_key: str = (
+            os.getenv("GOOGLE_API_KEY")
+            or os.getenv("OPENAI_API_KEY")
+            or "mock-api-key-for-initialization"
+        )
+        test_agent: CompiledStateGraph = get_security_agent(api_key=mock_key, provider="google")
+        print("Status: Google GenAI Agent graph compiled successfully.")
         print(f"Graph Nodes: {list(test_agent.nodes.keys())}")
         print("Available Tools: query_security_advisory, execute_sandboxed_command")
     except Exception as exc:
