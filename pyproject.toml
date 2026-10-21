@@ -1,2 +1,2 @@
 [tool.uv.workspace]
-members = ["hw3"]
+members = ["hw3", "hw4"]

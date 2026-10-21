@@ -36,6 +36,7 @@ htmlcov/
 build/
 dist/
 *.egg-info/
+*.egg-info
 *.egg
 
 # Database & Vector Storage (HW2 ChromaDB)
