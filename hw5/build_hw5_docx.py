@@ -73,7 +73,7 @@ OUTPUT_DOCX = BASE_DIR / f"hw5-{FAU_ID}.docx"
 OUTPUT_PDF = BASE_DIR / f"hw5-{FAU_ID}.pdf"
 
 # Read screencast URL if populated
-SCREENCAST_URL = "https://youtu.be/YOUR_SCREENCAST_URL"
+SCREENCAST_URL = "https://youtu.be/riqRFlAw3LM"
 screencast_candidates = [
     HW5_DIR / "screencast_url.txt",
     REPO_DIR / "hw5" / "screencast_url.txt",

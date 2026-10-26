@@ -6,7 +6,7 @@
 **Taxonomy Framework:** [HiddenLayer Adversarial Prompt Engineering (APE)](https://ape.hiddenlayer.com/)  
 **Target Application:** Autonomous Cybersecurity Agent for System Diagnostics and Vulnerability Remediation (LangGraph ReAct Architecture)  
 **Repository URL:** [https://github.com/dtorres12025/gensec-Torres-Z23875984](https://github.com/dtorres12025/gensec-Torres-Z23875984)  
-**Screencast Recording:** See `hw5/screencast_url.txt` and `hw5/screencast_script.md`  
+**Screencast Recording:** [https://youtu.be/riqRFlAw3LM](https://youtu.be/riqRFlAw3LM) (See `hw5/screencast_url.txt` and `hw5/screencast_script.md`)  
 
 ---
 
