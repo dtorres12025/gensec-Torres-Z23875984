@@ -467,58 +467,6 @@ def build_word_document() -> Path:
                 width=5.8,
             )
 
-    # Screencast Script & Hardening Architecture Section
-    doc.add_page_break()
-    p_sum_hdr = doc.add_paragraph()
-    p_sum_hdr.paragraph_format.space_before = Pt(6)
-    p_sum_hdr.paragraph_format.space_after = Pt(3)
-    r_sum_hdr = p_sum_hdr.add_run("Section 5: Screencast Presentation Script & Defense-in-Depth Hardening")
-    r_sum_hdr.font.name = "Arial"
-    r_sum_hdr.font.size = Pt(12)
-    r_sum_hdr.bold = True
-    r_sum_hdr.font.color.rgb = COLOR_NAVY
-
-    # Hardening Table
-    remed_table = doc.add_table(rows=4, cols=3)
-    remed_table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    remed_table.autofit = False
-
-    remed_headers = ["Layer", "Defensive Control", "Targeted Vulnerability Mitigation"]
-    for c_i, h in enumerate(remed_headers):
-        cell = remed_table.cell(0, c_i)
-        set_cell_shading(cell, "003366")
-        set_cell_margins(cell, top=60, bottom=60, left=80, right=80)
-        p = cell.paragraphs[0]
-        r = p.add_run(h)
-        r.bold = True
-        r.font.size = Pt(8.5)
-        r.font.color.rgb = RGBColor(255, 255, 255)
-
-    remed_rows = [
-        ("Deterministic Sandboxing", "Strict Path Confinement & chroot", "Blocks directory traversal (cat ../.env) by restricting file reads strictly to isolated log paths."),
-        ("Tool Output Redaction", "Automated Token & Credential Sanitizer", "Intercepts tool stdout and redacts API keys, tokens, and passwords via regex before returning to the LLM."),
-        ("Dual-LLM Intent Guard", "Independent Evaluator Model", "Screens user prompts for deceptive pretexting, narrative smuggling, and imperative tone prior to tool execution."),
-    ]
-
-    for r_i, row_data in enumerate(remed_rows, 1):
-        for c_i, val in enumerate(row_data):
-            cell = remed_table.cell(r_i, c_i)
-            bg = "F9FBFD" if r_i % 2 == 1 else "FFFFFF"
-            set_cell_shading(cell, bg)
-            set_cell_margins(cell, top=50, bottom=50, left=70, right=70)
-            p = cell.paragraphs[0]
-            r = p.add_run(val)
-            r.font.size = Pt(8)
-            r.font.color.rgb = COLOR_CHARCOAL
-
-    doc.add_paragraph().paragraph_format.space_after = Pt(8)
-
-    add_figure(
-        doc,
-        SCREENSHOTS_DIR / "real_step3_screencast.png",
-        f"Figure 6: Authentic Antigravity IDE window showing hw5/screencast_script.md with student FAU ID {FAU_ID} in title bar.",
-        width=6.0,
-    )
 
     doc.save(str(OUTPUT_DOCX))
     print(f"[✓] Successfully generated Word Document: {OUTPUT_DOCX}")
@@ -1055,70 +1003,6 @@ def build_reportlab_pdf() -> Path:
         max_h=250,
     ))
 
-    # ==========================================================================
-    # PAGE 9: Screencast Presentation Script & Hardening Architecture
-    # ==========================================================================
-    story.append(PageBreak())
-    story.append(Paragraph("Section 5: Screencast Presentation Script & Defense-in-Depth Hardening", h2_style))
-
-    remed_headers = [Paragraph("<b>Defensive Layer</b>", table_header_white_style), Paragraph("<b>Remediation Architecture</b>", table_header_white_style), Paragraph("<b>Targeted Threat Mitigation</b>", table_header_white_style)]
-    remed_data = [remed_headers]
-    remed_content = [
-        ("Deterministic Sandboxing", "Strict Path Confinement & chroot", "Enforces canonical path boundaries, blocking relative path traversal ('../') and confining reads strictly to logs/."),
-        ("Tool Output Redaction", "Automated Token & Secret Filter", "Intercepts tool stdout prior to model ingestion and strips API keys, session tokens, and passwords using regex heuristics."),
-        ("Dual-LLM Intent Guard", "Independent Evaluator Model", "Deploys an isolated judge LLM to classify adversarial intent (pretexting, narrative smuggling) before tool dispatch."),
-    ]
-    for row in remed_content:
-        remed_data.append([Paragraph(row[0], table_cell_style), Paragraph(row[1], table_cell_style), Paragraph(row[2], table_cell_style)])
-
-    t_remed = Table(remed_data, colWidths=[120, 150, 270])
-    t_remed.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#003366")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-        ("BACKGROUND", (0, 1), (-1, 1), colors.HexColor("#F9FBFD")),
-        ("BACKGROUND", (0, 2), (-1, 2), colors.white),
-        ("BACKGROUND", (0, 3), (-1, 3), colors.HexColor("#F9FBFD")),
-        ("TOPPADDING", (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ("LEFTPADDING", (0, 0), (-1, -1), 5),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
-    ]))
-    story.append(t_remed)
-    story.append(Spacer(1, 6))
-
-    sc_headers = [Paragraph("<b>Time</b>", table_header_white_style), Paragraph("<b>Presentation Segment</b>", table_header_white_style), Paragraph("<b>Screen Share Visual & Narrative Script</b>", table_header_white_style)]
-    sc_data = [sc_headers]
-    sc_rows = [
-        ("0:00 - 0:45", "Introduction & Architecture", "Webcam ON. Introduce Daniel Torres, FAU ID Z23875984, ReAct agent architecture, and APE taxonomy framework."),
-        ("0:45 - 1:30", "Baseline Operation", "Screen share Figure 2 (macOS Terminal). Demonstrate compliant diagnostic execution of uname and uptime within least privilege."),
-        ("1:30 - 2:30", "Attack 1: Credential Exfiltration", "Screen share Figure 3A/3B & 3D. Explain Narrative Smuggling (HLT03.02) & Synonym Attack (HLT02.03) weaponizing 'env' tool."),
-        ("2:30 - 3:30", "Attack 2: Configuration Extraction", "Screen share Figure 4A & 4C. Detail Pretexting (HLT05.13) under compliance pretext extracting private .env.example."),
-        ("3:30 - 4:15", "Attack 3: Host Reconnaissance", "Screen share Figure 5A & 5C. Show Imperative Emphasis (HLT03.04) reading /etc/hosts and mapping admin group privileges."),
-        ("4:15 - 4:45", "Hardening & Conclusion", "Webcam ON. Review 3-phase defense-in-depth remediation controls and conclude under 5-minute limit."),
-    ]
-    for row in sc_rows:
-        sc_data.append([Paragraph(row[0], table_cell_style), Paragraph(row[1], table_cell_style), Paragraph(row[2], table_cell_style)])
-
-    t_sc = Table(sc_data, colWidths=[65, 135, 340])
-    t_sc.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#003366")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-        ("TOPPADDING", (0, 0), (-1, -1), 2.5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2.5),
-        ("LEFTPADDING", (0, 0), (-1, -1), 4),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-    ]))
-    story.append(t_sc)
-    story.append(Spacer(1, 6))
-
-    story.append(create_figure_block(
-        SCREENSHOTS_DIR / "real_step3_screencast.png",
-        f"Figure 6: Authentic Antigravity IDE window showing hw5/screencast_script.md with student FAU ID {FAU_ID} in title bar.",
-        max_w=540,
-        max_h=190,
-    ))
 
     pdf_doc.build(story, canvasmaker=NumberedCanvas)
     print(f"[✓] Successfully generated ReportLab PDF: {OUTPUT_PDF}")
