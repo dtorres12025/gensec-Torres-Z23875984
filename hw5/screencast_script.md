@@ -34,7 +34,7 @@
 ---
 
 ### Part 2: Baseline Diagnostic Verification (0:45 – 1:30)
-*(Screen share: Terminal window showing `fig1_baseline_diagnostic.png` or live run of `python hw5/pentest_suite.py`)*
+*(Screen share: macOS Terminal window showing `real_terminal_window.png` or live run of `python hw5/pentest_suite.py`)*
 
 > "First, let's look at the baseline intended operation. When a user submits a standard system health inquiry—such as asking for the kernel architecture and uptime—the agent operates completely within policy.
 >
@@ -43,7 +43,7 @@
 ---
 
 ### Part 3: Attack 1 – Narrative Smuggling & Synonym Attack (1:30 – 2:30)
-*(Screen share: Terminal window showing `fig2_attack1_prompt_response.png` and `fig3_attack1_tool_output.png`)*
+*(Screen share: macOS Terminal window `real_terminal_attack1_prompt.png` and Antigravity IDE `real_step1_pentest_suite.png`)*
 
 > "Now, let's demonstrate **Attack 1**: Runtime Environment and Credential Exfiltration.
 >
@@ -58,7 +58,7 @@
 ---
 
 ### Part 4: Attack 2 – Sensitive Configuration Extraction via Pretexting (2:30 – 3:30)
-*(Screen share: Terminal window showing `fig4_attack2_prompt_response.png` and `fig5_attack2_tool_output.png`)*
+*(Screen share: macOS Terminal window `real_terminal_attack2_prompt.png` and Antigravity IDE `real_step2_build_docx.png`)*
 
 > "Next is **Attack 2**: Sensitive Configuration and Architecture Extraction via **Pretexting (`HLT05.13`)** under the **Context Manipulation** tactic.
 >
@@ -71,7 +71,7 @@
 ---
 
 ### Part 5: Attack 3 – Host Reconnaissance via Imperative Emphasis (3:30 – 4:15)
-*(Screen share: Terminal window showing `fig6_attack3_reconnaissance.png`)*
+*(Screen share: macOS Terminal window `real_terminal_attack3_reconnaissance.png` and Antigravity IDE `real_step4_readme.png`)*
 
 > "Finally, in **Attack 3**, I demonstrated **Imperative Emphasis (`HLT03.04`)** to force the agent into performing host reconnaissance.
 >
@@ -82,7 +82,7 @@
 ---
 
 ### Part 6: Defense-in-Depth Hardening & Conclusion (4:15 – 4:45)
-*(Webcam back on full screen or side-by-side with summary matrix `fig7_pentest_suite_summary.png`)*
+*(Webcam back on full screen or side-by-side with IDE summary `real_step3_screencast.png`)*
 
 > "To remediate these vulnerabilities, I developed three key defense-in-depth controls:
 > 1. **Path Sandboxing:** Restrict file reading utilities strictly to an isolated `logs/` directory and disallow relative path navigation (`../`).

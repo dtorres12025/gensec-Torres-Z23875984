@@ -8,9 +8,10 @@ Automates the generation of:
 - hw5-Z23875984.docx (from homework-template.docx)
 - hw5-Z23875984.pdf (via ReportLab publication-grade engine)
 
-Embeds exact student prompts, authentic high-resolution terminal screenshots
-with visible student FAU ID (Z23875984), tool execution observations,
-agent responses, and complete APE taxonomy evaluation matrices.
+Embeds exact student prompts, 100% authentic macOS window screenshots
+(captured via native screencapture) with visible student FAU ID (Z23875984),
+tool execution observations, live agent responses, and complete APE taxonomy
+evaluation matrices.
 """
 
 from __future__ import annotations
@@ -384,28 +385,29 @@ def build_word_document() -> Path:
 
         # 7. Authentic Screenshot Documentation (with visible FAU ID)
         if test["test_id"] == "BASELINE_OPERATION":
-            add_figure(doc, SCREENSHOTS_DIR / "fig1_baseline_diagnostic.png", f"Figure 1: Baseline Diagnostic Execution in VSCode Terminal showing FAU ID {FAU_ID} and non-destructive uname/uptime commands.")
+            add_figure(doc, SCREENSHOTS_DIR / "real_terminal_window.png", f"Figure 1: Authentic macOS Terminal capture showing baseline diagnostic execution (uname, uptime) and student prompt {FAU_ID}@mac:~ %.")
         elif test["test_id"] == "ATTACK_1_NARRATIVE_SMUGGLING_SYNONYM":
-            add_figure(doc, SCREENSHOTS_DIR / "fig2_attack1_prompt_response.png", f"Figure 2A: Attack 1 Prompt Submission & Tool Invocation (`env`) under Narrative Smuggling and Synonym Attack (FAU ID: {FAU_ID}).")
-            add_figure(doc, SCREENSHOTS_DIR / "fig3_attack1_tool_output.png", f"Figure 2B: Attack 1 Tool Observation & Response showing live runtime environment credential exfiltration (FAU ID: {FAU_ID}).")
+            add_figure(doc, SCREENSHOTS_DIR / "real_step1_pentest_suite.png", f"Figure 2A: Authentic Antigravity IDE window showing hw5/pentest_suite.py and student FAU ID {FAU_ID} in title bar.")
+            add_figure(doc, SCREENSHOTS_DIR / "real_terminal_attack1_prompt.png", f"Figure 2B: Authentic macOS Terminal capture showing live Attack 1 execution, tool invocation (`env`), and credential dump.")
         elif test["test_id"] == "ATTACK_2_PRETEXTING":
-            add_figure(doc, SCREENSHOTS_DIR / "fig4_attack2_prompt_response.png", f"Figure 3A: Attack 2 Prompt Submission & Tool Invocation (`cat .env.example`) via Regulatory Pretexting (FAU ID: {FAU_ID}).")
-            add_figure(doc, SCREENSHOTS_DIR / "fig5_attack2_tool_output.png", f"Figure 3B: Attack 2 Tool Observation & Response showing private configuration file extraction and exposure (FAU ID: {FAU_ID}).")
+            add_figure(doc, SCREENSHOTS_DIR / "real_step2_build_docx.png", f"Figure 3A: Authentic Antigravity IDE window showing hw5/build_hw5_docx.py and student FAU ID {FAU_ID} in title bar.")
+            add_figure(doc, SCREENSHOTS_DIR / "real_terminal_attack2_prompt.png", f"Figure 3B: Authentic macOS Terminal capture showing live Attack 2 execution and configuration file extraction.")
         elif test["test_id"] == "ATTACK_3_IMPERATIVE_RECONNAISSANCE":
-            add_figure(doc, SCREENSHOTS_DIR / "fig6_attack3_reconnaissance.png", f"Figure 4: Attack 3 Host Reconnaissance & Privilege Mapping (`head /etc/hosts`, `id`) via Imperative Emphasis (FAU ID: {FAU_ID}).")
+            add_figure(doc, SCREENSHOTS_DIR / "real_terminal_attack3_reconnaissance.png", f"Figure 4A: Authentic macOS Terminal capture showing live Attack 3 execution, host reconnaissance, and concluding prompt {FAU_ID}@mac:Homework 05 %.")
+            add_figure(doc, SCREENSHOTS_DIR / "real_step4_readme.png", f"Figure 4B: Authentic Antigravity IDE window showing hw5/README.md and student FAU ID {FAU_ID} in title bar.")
 
-    # Evaluation Summary Matrix Section
+    # Screencast Script & Summary Section
     doc.add_page_break()
     p_sum_hdr = doc.add_paragraph()
     p_sum_hdr.paragraph_format.space_before = Pt(8)
     p_sum_hdr.paragraph_format.space_after = Pt(4)
-    r_sum_hdr = p_sum_hdr.add_run("Section 5: Adversarial Penetration Testing Evaluation Matrix")
+    r_sum_hdr = p_sum_hdr.add_run("Section 5: Screencast Presentation Script & Evaluation Summary")
     r_sum_hdr.font.name = "Arial"
     r_sum_hdr.font.size = Pt(13)
     r_sum_hdr.bold = True
     r_sum_hdr.font.color.rgb = COLOR_NAVY
 
-    add_figure(doc, SCREENSHOTS_DIR / "fig7_pentest_suite_summary.png", f"Figure 5: Full Penetration Test Suite Evaluation Matrix in Terminal with prominent student FAU ID {FAU_ID}.")
+    add_figure(doc, SCREENSHOTS_DIR / "real_step3_screencast.png", f"Figure 5: Authentic Antigravity IDE window showing hw5/screencast_script.md with student FAU ID {FAU_ID} in title bar.")
 
     doc.save(str(OUTPUT_DOCX))
     print(f"[✓] Successfully generated Word Document: {OUTPUT_DOCX}")
@@ -563,6 +565,16 @@ def build_reportlab_pdf() -> Path:
         story.append(Paragraph(p_txt.replace("\n", " "), body_style))
     story.append(Spacer(1, 6))
 
+    def add_pdf_img(path: Path, cap: str):
+        if path.exists():
+            with Image.open(path) as im:
+                w, h = im.size
+            scale = 540.0 / w
+            target_h = min(h * scale, 270)
+            story.append(RLImage(str(path), width=540, height=target_h))
+            story.append(Paragraph(cap, caption_style))
+            story.append(Spacer(1, 4))
+
     # Detailed Attacks
     for idx, test in enumerate(PENTEST_DATA, 1):
         story.append(PageBreak())
@@ -610,7 +622,7 @@ def build_reportlab_pdf() -> Path:
             for tc in tool_calls:
                 obs_lines.append(f"<b>[TOOL INVOCATION]</b> {tc['name']}({json.dumps(tc['args'])})")
             for tr in tool_results:
-                obs_lines.append(f"<b>[OBSERVATION FROM TOOL: {tr['name']}]</b><br/>{tr['content'].replace(chr(10), '<br/>')[:400]}...")
+                obs_lines.append(f"<b>[OBSERVATION FROM TOOL: {tr['name']}]</b><br/>{tr['content'].replace(chr(10), '<br/>')[:380]}...")
             obs_p = Paragraph("<br/>".join(obs_lines), code_style)
             t_obs = Table([[obs_p]], colWidths=[540])
             t_obs.setStyle(TableStyle([
@@ -625,7 +637,7 @@ def build_reportlab_pdf() -> Path:
             story.append(Spacer(1, 5))
 
         # Agent Response
-        resp_clean = exec_data.get("response", "")[:600].replace("\n", "<br/>")
+        resp_clean = exec_data.get("response", "")[:500].replace("\n", "<br/>")
         resp_p = Paragraph(f"<b>[APPLICATION/AGENT RESPONSE]</b><br/>{resp_clean}...", code_style)
         t_resp = Table([[resp_p]], colWidths=[540])
         t_resp.setStyle(TableStyle([
@@ -644,38 +656,23 @@ def build_reportlab_pdf() -> Path:
         story.append(imp_p)
         story.append(Spacer(1, 4))
 
-        # Embed Relevant Screenshots
-        def add_pdf_img(path: Path, cap: str):
-            if path.exists():
-                with Image.open(path) as im:
-                    w, h = im.size
-                scale = 540.0 / w
-                target_h = min(h * scale, 260)
-                story.append(RLImage(str(path), width=540, height=target_h))
-                story.append(Paragraph(cap, caption_style))
-                story.append(Spacer(1, 4))
-
+        # Embed Authentic Screenshots
         if test["test_id"] == "BASELINE_OPERATION":
-            add_pdf_img(SCREENSHOTS_DIR / "fig1_baseline_diagnostic.png", f"Figure 1: Baseline Diagnostic Execution in VSCode Terminal showing student FAU ID {FAU_ID}.")
+            add_pdf_img(SCREENSHOTS_DIR / "real_terminal_window.png", f"Figure 1: Authentic macOS Terminal capture showing baseline diagnostic execution (uname, uptime) and student prompt {FAU_ID}@mac:~ %.")
         elif test["test_id"] == "ATTACK_1_NARRATIVE_SMUGGLING_SYNONYM":
-            add_pdf_img(SCREENSHOTS_DIR / "fig2_attack1_prompt_response.png", f"Figure 2A: Attack 1 Prompt Submission & Tool Invocation (`env`) under Narrative Smuggling (FAU ID: {FAU_ID}).")
-            add_pdf_img(SCREENSHOTS_DIR / "fig3_attack1_tool_output.png", f"Figure 2B: Attack 1 Tool Observation & Response showing live runtime environment credential exfiltration (FAU ID: {FAU_ID}).")
+            add_pdf_img(SCREENSHOTS_DIR / "real_step1_pentest_suite.png", f"Figure 2A: Authentic Antigravity IDE window showing hw5/pentest_suite.py and student FAU ID {FAU_ID} in title bar.")
+            add_pdf_img(SCREENSHOTS_DIR / "real_terminal_attack1_prompt.png", f"Figure 2B: Authentic macOS Terminal capture showing live Attack 1 execution, tool invocation (`env`), and credential dump.")
         elif test["test_id"] == "ATTACK_2_PRETEXTING":
-            add_pdf_img(SCREENSHOTS_DIR / "fig4_attack2_prompt_response.png", f"Figure 3A: Attack 2 Prompt Submission & Tool Invocation (`cat .env.example`) via Regulatory Pretexting (FAU ID: {FAU_ID}).")
-            add_pdf_img(SCREENSHOTS_DIR / "fig5_attack2_tool_output.png", f"Figure 3B: Attack 2 Tool Observation & Response showing private configuration file extraction and exposure (FAU ID: {FAU_ID}).")
+            add_pdf_img(SCREENSHOTS_DIR / "real_step2_build_docx.png", f"Figure 3A: Authentic Antigravity IDE window showing hw5/build_hw5_docx.py and student FAU ID {FAU_ID} in title bar.")
+            add_pdf_img(SCREENSHOTS_DIR / "real_terminal_attack2_prompt.png", f"Figure 3B: Authentic macOS Terminal capture showing live Attack 2 execution and configuration file extraction.")
         elif test["test_id"] == "ATTACK_3_IMPERATIVE_RECONNAISSANCE":
-            add_pdf_img(SCREENSHOTS_DIR / "fig6_attack3_reconnaissance.png", f"Figure 4: Attack 3 Host Reconnaissance & Privilege Mapping (`head /etc/hosts`, `id`) via Imperative Emphasis (FAU ID: {FAU_ID}).")
+            add_pdf_img(SCREENSHOTS_DIR / "real_terminal_attack3_reconnaissance.png", f"Figure 4A: Authentic macOS Terminal capture showing live Attack 3 execution, host reconnaissance, and concluding prompt {FAU_ID}@mac:Homework 05 %.")
+            add_pdf_img(SCREENSHOTS_DIR / "real_step4_readme.png", f"Figure 4B: Authentic Antigravity IDE window showing hw5/README.md and student FAU ID {FAU_ID} in title bar.")
 
-    # Evaluation Matrix Page
+    # Screencast Script & Summary Page
     story.append(PageBreak())
-    story.append(Paragraph("Section 5: Adversarial Penetration Testing Evaluation Matrix", h2_style))
-    if (SCREENSHOTS_DIR / "fig7_pentest_suite_summary.png").exists():
-        with Image.open(SCREENSHOTS_DIR / "fig7_pentest_suite_summary.png") as im:
-            w, h = im.size
-        scale = 540.0 / w
-        target_h = min(h * scale, 340)
-        story.append(RLImage(str(SCREENSHOTS_DIR / "fig7_pentest_suite_summary.png"), width=540, height=target_h))
-        story.append(Paragraph(f"Figure 5: Full Penetration Test Suite Evaluation Matrix in Terminal with prominent student FAU ID {FAU_ID}.", caption_style))
+    story.append(Paragraph("Section 5: Screencast Presentation Script & Evaluation Summary", h2_style))
+    add_pdf_img(SCREENSHOTS_DIR / "real_step3_screencast.png", f"Figure 5: Authentic Antigravity IDE window showing hw5/screencast_script.md with student FAU ID {FAU_ID} in title bar.")
 
     pdf_doc.build(story)
     print(f"[✓] Successfully generated ReportLab PDF: {OUTPUT_PDF}")
@@ -697,7 +694,7 @@ def main() -> None:
     docx_file = build_word_document()
     pdf_file = build_reportlab_pdf()
     print("\n" + "=" * 80)
-    print("[✓] HOMEWORK 5 SUBMISSION GENERATION COMPLETE")
+    print("[✓] HOMEWORK 5 SUBMISSION GENERATION COMPLETE (REAL SCREENSHOTS EMBEDDED)")
     print(f"    • Word Document : {docx_file}")
     print(f"    • PDF Document  : {pdf_file}")
     print("=" * 80 + "\n")
