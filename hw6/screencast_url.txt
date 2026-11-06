@@ -4,4 +4,5 @@
 # Homework: 06 - Code Generation with a Coding Agent
 
 # Replace the URL below with your unlisted YouTube recording link:
-https://youtu.be/PENDING_RECORDING
+https://youtu.be/UKkpveFxUms
+
