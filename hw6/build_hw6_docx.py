@@ -144,6 +144,26 @@ def add_callout(doc: Document, title: str, text: str, border_color="003366", bg_
     doc.add_paragraph().paragraph_format.space_after = Pt(4)
 
 
+def add_screenshot_figure(doc: Document, image_path: Optional[Path], figure_label: str):
+    if image_path and image_path.exists():
+        p_img = doc.add_paragraph()
+        p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_img.paragraph_format.space_before = Pt(4)
+        p_img.paragraph_format.space_after = Pt(2)
+        run_img = p_img.add_run()
+        run_img.add_picture(str(image_path), width=Inches(6.0))
+
+        p_cap = doc.add_paragraph()
+        p_cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_cap.paragraph_format.space_before = Pt(0)
+        p_cap.paragraph_format.space_after = Pt(8)
+        run_cap = p_cap.add_run(figure_label)
+        run_cap.font.name = "Arial"
+        run_cap.font.size = Pt(8)
+        run_cap.font.italic = True
+        run_cap.font.color.rgb = COLOR_MUTED
+
+
 # ==============================================================================
 # Build DOCX Document
 # ==============================================================================
@@ -256,6 +276,12 @@ def build_word_document() -> Path:
     )
     p_prompts_intro.paragraph_format.space_after = Pt(4)
 
+    # Discover prompt screenshots
+    screenshots = sorted(BASE_DIR.glob("Screenshot*.png")) or sorted((BASE_DIR / "screenshots").glob("Screenshot*.png")) or sorted((BASE_DIR / "screenshots").glob("Screenshot*.png"))
+    sc1 = screenshots[0] if len(screenshots) > 0 else None
+    sc2 = screenshots[1] if len(screenshots) > 1 else None
+    sc3 = screenshots[2] if len(screenshots) > 2 else None
+
     # Prompt 1
     add_callout(
         doc,
@@ -277,6 +303,11 @@ def build_word_document() -> Path:
         "4. FastAPI endpoints: POST /api/inspect and GET /api/health.",
         border_color="003366",
         bg_color="F8FAFC",
+    )
+    add_screenshot_figure(
+        doc,
+        sc1,
+        f"Figure 2.1: Prompt 1 Execution & Architecture Generation in Google Antigravity (Student: {STUDENT_NAME} | FAU ID: {FAU_ID})",
     )
 
     # Prompt 2
@@ -301,6 +332,11 @@ def build_word_document() -> Path:
         border_color="003366",
         bg_color="F8FAFC",
     )
+    add_screenshot_figure(
+        doc,
+        sc2,
+        f"Figure 2.2: Prompt 2 Execution & Adversarial Input Hardening in Google Antigravity (Student: {STUDENT_NAME} | FAU ID: {FAU_ID})",
+    )
 
     # Prompt 3
     add_callout(
@@ -317,6 +353,11 @@ def build_word_document() -> Path:
         "3. Self-Execution & Standalone Support: Add a main entry point so running 'python hw6/app.py' starts the server on http://127.0.0.1:8000.",
         border_color="003366",
         bg_color="F8FAFC",
+    )
+    add_screenshot_figure(
+        doc,
+        sc3,
+        f"Figure 2.3: Prompt 3 Execution & SecOps Dashboard Generation in Google Antigravity (Student: {STUDENT_NAME} | FAU ID: {FAU_ID})",
     )
 
     # Section 3: Security Aspects & Defenses Against Adversarial Inputs
@@ -666,6 +707,22 @@ def build_pdf_document() -> Path:
         )
     )
 
+    screenshots = sorted(BASE_DIR.glob("Screenshot*.png")) or sorted((BASE_DIR / "screenshots").glob("Screenshot*.png"))
+    sc1 = screenshots[0] if len(screenshots) > 0 else None
+    sc2 = screenshots[1] if len(screenshots) > 1 else None
+    sc3 = screenshots[2] if len(screenshots) > 2 else None
+
+    cap_style = ParagraphStyle(
+        "FigCap",
+        parent=styles["Normal"],
+        fontName="Helvetica-Oblique",
+        fontSize=7.5,
+        leading=10,
+        alignment=1,
+        textColor=colors.HexColor("#5A5F69"),
+        spaceAfter=6,
+    )
+
     story.append(
         make_callout_table(
             "Prompt 1: Core System Architecture, FastAPI Engine & Multi-Layer Threat Detection",
@@ -677,6 +734,16 @@ def build_pdf_document() -> Path:
             "#F8FAFC",
         )
     )
+    if sc1 and sc1.exists():
+        story.append(Spacer(1, 3))
+        story.append(RLImage(str(sc1), width=490, height=278))
+        story.append(Spacer(1, 2))
+        story.append(
+            Paragraph(
+                f"Figure 2.1: Prompt 1 Execution in Google Antigravity (Student: {STUDENT_NAME} | FAU ID: {FAU_ID})",
+                cap_style,
+            )
+        )
     story.append(Spacer(1, 4))
 
     story.append(
@@ -692,6 +759,16 @@ def build_pdf_document() -> Path:
             "#F8FAFC",
         )
     )
+    if sc2 and sc2.exists():
+        story.append(Spacer(1, 3))
+        story.append(RLImage(str(sc2), width=490, height=278))
+        story.append(Spacer(1, 2))
+        story.append(
+            Paragraph(
+                f"Figure 2.2: Prompt 2 Execution in Google Antigravity (Student: {STUDENT_NAME} | FAU ID: {FAU_ID})",
+                cap_style,
+            )
+        )
     story.append(Spacer(1, 4))
 
     story.append(
@@ -706,6 +783,16 @@ def build_pdf_document() -> Path:
             "#F8FAFC",
         )
     )
+    if sc3 and sc3.exists():
+        story.append(Spacer(1, 3))
+        story.append(RLImage(str(sc3), width=490, height=278))
+        story.append(Spacer(1, 2))
+        story.append(
+            Paragraph(
+                f"Figure 2.3: Prompt 3 Execution in Google Antigravity (Student: {STUDENT_NAME} | FAU ID: {FAU_ID})",
+                cap_style,
+            )
+        )
     story.append(Spacer(1, 6))
 
     # Section 3
@@ -812,3 +899,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
