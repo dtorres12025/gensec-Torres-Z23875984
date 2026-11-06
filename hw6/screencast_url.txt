@@ -1,0 +1,7 @@
+# Screencast Recording URL
+# Course: FAU COT 5930 - Security Engineering Systems with Generative AI
+# Student: Daniel Torres (FAU ID: Z23875984)
+# Homework: 06 - Code Generation with a Coding Agent
+
+# Replace the URL below with your unlisted YouTube recording link:
+https://youtu.be/PENDING_RECORDING

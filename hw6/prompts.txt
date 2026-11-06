@@ -1,0 +1,79 @@
+================================================================================
+COT 5930 - Security Engineering Systems with Generative AI (FAU)
+Homework 06: Code Generation with a Coding Agent
+Student: Daniel Torres | FAU ID: Z23875984
+Coding Agent Selected: Google Antigravity (v2.0)
+Application: GenSec-Sentinel (AI Security Gateway & Adversarial Payload Firewall)
+================================================================================
+
+OVERVIEW OF PROMPT ORCHESTRATION:
+This entire application was engineered using Google Antigravity in three sequential,
+highly focused prompts designed to produce a secure, production-grade Python web
+application and adversarial threat detection engine with minimal manual intervention:
+  - Prompt 1: Core System Architecture, FastAPI Engine, and Multi-Layer Threat Detector
+  - Prompt 2: Adversarial Input Defense Hardening (SSRF, Homoglyphs, ReDoS, Context Guards)
+  - Prompt 3: Embedded SecOps Web Dashboard, 1-Click Presets & Capabilities Benchmark Suite
+
+--------------------------------------------------------------------------------
+PROMPT 1: Architecture, FastAPI Engine & Multi-Layer Threat Detection
+--------------------------------------------------------------------------------
+Act as a senior cybersecurity software engineer. Using Google Antigravity, create a secure, production-grade Python application in hw6/app.py called "GenSec-Sentinel: Autonomous AI Security Gateway & Adversarial Payload Firewall".
+
+The application must be built using FastAPI and Pydantic, running standalone on port 8000 (uvicorn hw6.app:app or python hw6/app.py).
+
+The core mission of the application is to intercept, inspect, sanitize, and evaluate inbound user queries and API requests before forwarding them to an internal LLM or security advisory engine. It must guard against both Generative AI vulnerabilities (OWASP Top 10 for LLMs) and traditional web/API exploitation vectors.
+
+In this first iteration, implement:
+1. Strongly typed Pydantic models (InspectionRequest, ThreatDetection, InspectionResult, SecurityAuditLog).
+2. A multi-layer threat detection pipeline that analyzes incoming payloads for:
+   - Adversarial Prompt Injections mapped to OWASP LLM01 and HiddenLayer APE taxonomy (system instruction overrides, narrative smuggling, jailbreaks).
+   - System Command Injections (CWE-78: shell metacharacters, forbidden diagnostic binaries like cat /etc/passwd, env, rm -rf, sudo).
+   - Cross-Site Scripting (CWE-79: script tags, malicious event handlers like onerror).
+3. Baseline defense rules: reject payloads exceeding 4096 characters (DoS/ReDoS prevention), compute a normalized threat score (0-100), and assign a policy verdict (ALLOWED, SANITIZED, or BLOCKED).
+4. FastAPI endpoints: POST /api/inspect and GET /api/health.
+
+Ensure modular architecture with clear type hints, comprehensive docstrings, and zero external runtime dependencies beyond FastAPI, Pydantic, and standard Python libraries.
+
+--------------------------------------------------------------------------------
+PROMPT 2: Adversarial Input Hardening & Threat Defense
+--------------------------------------------------------------------------------
+Refactor and harden hw6/app.py to aggressively defend against advanced adversarial inputs, bypass techniques, and obfuscation attacks that threat actors use against AI gateways.
+
+Specifically enhance the application with the following defensive security controls:
+1. Unicode Homoglyph & Smuggling Defense:
+   - Implement Unicode NFKC normalization and strip invisible zero-width characters (\u200b, \u200c, \u200d, \ufeff) before regex pattern evaluation to defeat homoglyph substitution and token smuggling.
+2. SSRF & Cloud Metadata Protection (CWE-918):
+   - Implement a strict URL/IP validator that performs DNS resolution and blocks private RFC 1918 subnets (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16), loopback/localhost (127.0.0.0/8, ::1), and cloud metadata IP addresses (169.254.169.254 AWS/GCP/Azure metadata).
+3. ReDoS Protection & Recursive Delimiter Stripping:
+   - Harden all regular expressions against Regular Expression Denial of Service (ReDoS) using bounded lookaheads and non-backtracking patterns.
+   - Recursively sanitize fake LLM role delimiters and prompt wrappers (e.g., <|im_start|>, <|im_end|>, [SYSTEM], [/SYSTEM], </context>, [INST]).
+4. Safe Advisory Query Engine with Context Guard:
+   - Implement an internal mock LLM advisory query engine with strict output escaping (html.escape) and guardrails to prevent indirect prompt injection from compromised backend knowledge bases.
+5. Defense-in-Depth Audit Logging:
+   - Maintain an in-memory rotating audit log of all security events recording timestamp, client IP, detected threat categories, threat score, action taken, and SHA-256 hash of the input (to avoid logging raw adversarial payloads in cleartext).
+
+Ensure all functions handle adversarial edge cases gracefully without throwing unhandled exceptions or leaking server stack traces.
+
+--------------------------------------------------------------------------------
+PROMPT 3: Embedded SecOps Dashboard, 1-Click Presets & Capabilities Benchmark
+--------------------------------------------------------------------------------
+Complete hw6/app.py by adding an embedded, modern responsive SecOps Web Dashboard and a built-in automated adversarial test suite:
+
+1. Embedded Web UI at GET /:
+   - Serve a sleek, dark-themed HTML5/CSS3/JavaScript dashboard directly from FastAPI (no external build tools or node_modules required).
+   - Features needed:
+     * Interactive query console allowing real-time prompt analysis.
+     * 5 One-Click Adversarial Presets matching our course threat model:
+       - Preset 1: APE HLT03.02 Narrative Smuggling (Cognitive Prompt Injection)
+       - Preset 2: CWE-78 OS Command Injection (cat /etc/passwd; id; env)
+       - Preset 3: CWE-918 SSRF Cloud Metadata Exfiltration (http://169.254.169.254/latest/meta-data/)
+       - Preset 4: CWE-79 Stored/Reflected XSS (<script>alert(document.cookie)</script>)
+       - Preset 5: Benign Cybersecurity Query (OWASP remediation advice)
+     * Dynamic visual feedback: animated Threat Score meter (0-100%), Verdict badges (BLOCKED/SANITIZED/ALLOWED), and triggered CWE/OWASP classification cards.
+2. Automated Adversarial Benchmark & Limitations Evaluation:
+   - Expose GET /api/benchmark and a CLI flag `python hw6/app.py --test` that runs 6 distinct test cases (4 malicious adversarial inputs, 1 sanitized input, 1 benign input).
+   - Generate a comprehensive evaluation report explicitly detailing:
+     * Capabilities: What attacks the gateway detects and mitigates (APE injection, command injection, SSRF, XSS, homoglyphs).
+     * Limitations: Known boundary constraints (e.g., zero-day semantic paraphrasing without heavy transformer models, multi-turn token splitting), satisfying academic rubric requirements.
+3. Self-Execution & Standalone Support:
+   - Add a main entry point so running `python hw6/app.py` automatically starts the Uvicorn server on http://127.0.0.1:8000.
